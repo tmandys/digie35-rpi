@@ -1,0 +1,9 @@
+%echo Generating Digie35 key
+Key-Type: RSA
+Key-Length: 4096
+Name-Real: Digie35
+Name-Email: tma@2p.cz
+Expire-Date: 0
+%no-ask-passphrase
+%no-protection
+%commit

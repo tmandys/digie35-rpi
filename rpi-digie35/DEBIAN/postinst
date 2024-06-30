@@ -1,0 +1,100 @@
+#!/bin/sh
+
+CONFIG=/boot/firmware/config.txt
+
+if [ ! -f $CONFIG ]; then
+    CONFIG=/boot/config.txt
+    if [ ! -f $CONFIG ]; then
+      echo "/boot/*/config.txt" file not found
+      exit 1
+    fi
+fi
+echo "Patching $CONFIG"
+
+raspi-config nonint do_i2c 0
+all_flag=
+
+do_check_all() {
+    if ! tail -1 $CONFIG | grep -q "\\[all\\]" ; then
+      if [ -z "$all_flag" ] ; then
+        sed $CONFIG -i -e "\$a[all]"
+        all_flag=1
+      fi
+    fi
+}
+
+do_overlay() {
+    name=$1
+    value=$2
+    comment=$3
+    if ! grep -q "dtoverlay=$name," $CONFIG ; then
+      do_check_all
+      sed $CONFIG -i -e "\$a# $comment"
+      sed $CONFIG -i -e "\$adtoverlay=$name,$value\n"
+    else
+      sed $CONFIG -i -e "s/^.*dtoverlay=$name,.*/dtoverlay=$name,$value/"
+    fi
+}
+
+do_param() {
+    name=$1
+    value=$2
+	if ! grep -q "$name=" $CONFIG ; then
+      do_check_all
+      sed $CONFIG -i -e "\$a$name=$value\n"
+    else
+      sed $CONFIG -i -e "s/^.*$name=.*/$name=$value/"
+    fi
+}
+
+do_overlay pwm-2chan pin=12,func=4,pin2=13,func2=4 "Hardware PWM"
+do_overlay act-led gpio=26 "Active LED"
+do_overlay i2c-rtc mcp7941x "RTC hardware clock"
+do_param usb_max_current_enable 1
+
+LOG2RAM=/etc/log2ram.conf
+echo "Patching $LOG2RAM"
+sed $LOG2RAM -i -e "s/^SIZE=.*/SIZE=100M/"
+sed $LOG2RAM -i -e "s/^MAIL=true/MAIL=false/"
+
+SMB=/etc/samba/smb.conf
+if ! grep -q "^\[media\]" $SMB ; then
+  echo "Patching $SMB"
+  sed $SMB -i -e "\$a[media]"
+  sed $SMB -i -e "\$a\   comment = Mounted removable disks"
+  sed $SMB -i -e "\$a\   path = /media/pi"
+  sed $SMB -i -e "\$a\   read only = no"
+  smbcontrol smbd reload-config
+else
+  echo "Patching $SMB skipped"
+fi
+
+# setting numlock
+# numlockx does not work on wayland
+#FILE=/usr/share/lightdm/lightdm.conf.d/01_debian.conf
+#if ! grep -q "^greeter-setup-script=" $FILE ; then
+#  echo "Patching $FILE"
+#  sed $FILE -i -e "\$agreeter-setup-script=/usr/bin/numlockx on"
+#else
+#  echo "Patching $FILE skipped"
+#fi
+
+FILE=/home/pi/.config/wayfire.ini
+crudini --set $FILE input kb_numlock_default_state true
+
+# setting onscreen keyboard toggle
+FILE=/home/pi/.config/wf-panel-pi.ini
+if ! grep -q "^launcher_900004=" $FILE ; then
+  echo "Patching $FILE"
+  sed $FILE -i -e "\$alauncher_900004=wvkbd.desktop"
+else
+  echo "Patching $FILE skipped"
+fi
+
+# wireshark stuff
+echo "May require 'sudo dpkg-reconfigure wireshark-common' to allow non-superuser to capture traffic"
+usermod -a -G wireshark pi
+modprobe usbmon
+setfacl -m u:pi:r /dev/usbmon*
+
+rm /usr/lib/python3.11/EXTERNALLY-MANAGED

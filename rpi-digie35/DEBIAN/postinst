@@ -52,21 +52,21 @@ do_overlay act-led gpio=26 "Active LED"
 do_overlay i2c-rtc mcp7941x "RTC hardware clock"
 do_param usb_max_current_enable 1
 
-LOG2RAM=/etc/log2ram.conf
-echo "Patching $LOG2RAM"
-sed $LOG2RAM -i -e "s/^SIZE=.*/SIZE=100M/"
-sed $LOG2RAM -i -e "s/^MAIL=true/MAIL=false/"
+FILE=/etc/log2ram.conf
+echo "Patching $FILE"
+sed $FILE -i -e "s/^SIZE=.*/SIZE=100M/"
+sed $FILE -i -e "s/^MAIL=true/MAIL=false/"
 
-SMB=/etc/samba/smb.conf
-if ! grep -q "^\[media\]" $SMB ; then
-  echo "Patching $SMB"
-  sed $SMB -i -e "\$a[media]"
-  sed $SMB -i -e "\$a\   comment = Mounted removable disks"
-  sed $SMB -i -e "\$a\   path = /media/pi"
-  sed $SMB -i -e "\$a\   read only = no"
+FILE=/etc/samba/smb.conf
+if ! grep -q "^\[media\]" $FILE ; then
+  echo "Patching $FILE"
+  sed $FILE -i -e "\$a[media]"
+  sed $FILE -i -e "\$a\   comment = Mounted removable disks"
+  sed $FILE -i -e "\$a\   path = /media/pi"
+  sed $FILE -i -e "\$a\   read only = no"
   smbcontrol smbd reload-config
 else
-  echo "Patching $SMB skipped"
+  echo "Patching $FILE skipped"
 fi
 
 # setting numlock
@@ -98,3 +98,7 @@ modprobe usbmon
 setfacl -m u:pi:r /dev/usbmon*
 
 rm /usr/lib/python3.11/EXTERNALLY-MANAGED
+
+FILE=/etc/hostname
+sed $FILE -i -e "s/^raspberrypi/digie35/"
+

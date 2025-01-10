@@ -3,7 +3,7 @@ Version: 0.4
 Maintainer: Tomas Mandys <tma@2p.cz>
 Architecture: all
 Description: Stuff required for Digie35
-Depends: autoconf, avahi-daemon, autopoint, chromium-browser, dh-python, code, crudini,
+Depends: autoconf, avahi-daemon, autopoint, chromium-browser, dh-python, code, crudini, evtest,
   ffmpeg, fuse, fuse3, gettext, git, git-gui,
   gphoto2, gpicview, gtkam, imagemagick, i2c-tools, lftp,
   libltdl-dev, libusb-dev, libusb-1.0-0-dev, libexif-dev, libopencv-dev, libpopt-dev, libxml2-dev, libjpeg-dev,

@@ -23,6 +23,7 @@ sudo apt-get install rpi-digie35
 
 # install python stuff, latest version or use 0.4 and run upgrade from GUI
 sudo rm /usr/lib/python3.11/EXTERNALLY-MANAGED
+
 pip install --user https://repos.digie35.com/python/digie35_ctrl-0.6-py3-none-any.whl
 
 # if ~/.local/bin did not exist then force adding to path

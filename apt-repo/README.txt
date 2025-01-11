@@ -9,7 +9,7 @@ curl -fsSL https://azlux.fr/repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrin
 echo "deb [signed-by=/etc/apt/keyrings/azlux.gpg] http://packages.azlux.fr/debian/ $VERSION_CODENAME main" | sudo tee /etc/apt/sources.list.d/azlux.list
 
 # digie35 repo
-url=http://www.2p.cz/repos/debian
+url=https://repos.digie35.com/debian
 curl -fsSL $url/repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/digie35.gpg
 echo "deb [signed-by=/etc/apt/keyrings/digie35.gpg] $url $VERSION_CODENAME main" | sudo tee /etc/apt/sources.list.d/digie35.list
 
@@ -23,7 +23,7 @@ sudo apt-get install rpi-digie35
 
 # install python stuff, latest version or use 0.4 and run upgrade from GUI
 sudo rm /usr/lib/python3.11/EXTERNALLY-MANAGED
-pip install --user http://www.2p.cz/repos/python/digie35_ctrl-0.5-py3-none-any.whl
+pip install --user https://repos.digie35.com/python/digie35_ctrl-0.6-py3-none-any.whl
 
 # if ~/.local/bin did not exist then force adding to path
 . ~/.profile

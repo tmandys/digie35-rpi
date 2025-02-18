@@ -12,13 +12,13 @@ fi
 echo "Patching $CONFIG"
 
 raspi-config nonint do_i2c 0
-all_flag=
+section_flag=
 
-do_check_all() {
-    if ! tail -1 $CONFIG | grep -q "\\[all\\]" ; then
-      if [ -z "$all_flag" ] ; then
-        sed $CONFIG -i -e "\$a[all]"
-        all_flag=1
+do_check_section() {
+    if ! tail -1 $CONFIG | grep -q "\\[$section\\]" ; then
+      if [ -z "$section_flag" ] ; then
+        sed $CONFIG -i -e "\$a[$section]"
+        section_flag=1
       fi
     fi
 }
@@ -28,7 +28,7 @@ do_overlay() {
     value=$2
     comment=$3
     if ! grep -q "dtoverlay=$name," $CONFIG ; then
-      do_check_all
+      do_check_section
       sed $CONFIG -i -e "\$a# $comment"
       sed $CONFIG -i -e "\$adtoverlay=$name,$value\n"
     else
@@ -39,18 +39,37 @@ do_overlay() {
 do_param() {
     name=$1
     value=$2
+    comment=$3
+    if ! grep -q "dtparam=$name=" $CONFIG ; then
+      do_check_section
+      sed $CONFIG -i -e "\$a# $comment"
+      sed $CONFIG -i -e "\$adtparam=$name=$value\n"
+    else
+      sed $CONFIG -i -e "s/^.*dtparam=$name=.*/dtparam=$name=$value/"
+    fi
+}
+
+
+do_keyvalue() {
+    name=$1
+    value=$2
 	if ! grep -q "$name=" $CONFIG ; then
-      do_check_all
+      do_check_section
       sed $CONFIG -i -e "\$a$name=$value\n"
     else
       sed $CONFIG -i -e "s/^.*$name=.*/$name=$value/"
     fi
 }
 
+section=all
 do_overlay pwm-2chan pin=12,func=4,pin2=13,func2=4 "Hardware PWM"
 do_overlay act-led gpio=26 "Active LED"
 do_overlay i2c-rtc mcp7941x "RTC hardware clock"
-do_param usb_max_current_enable 1
+do_keyvalue usb_max_current_enable 1
+
+section=pi5
+do_keyvalue avoid_warnings 1
+do_param pciex1 on "NVMe support for SSD"
 
 FILE=/etc/log2ram.conf
 echo "Patching $FILE"

@@ -76,4 +76,5 @@ EOF
 
 do_release "$VERSION_CODENAME"
 
-rm -rf $GNUPGHOME
+# Very dangerous when $GNUPGHOME is not set !
+# rm -rf $GNUPGHOME

@@ -9,6 +9,6 @@ Depends: autoconf, avahi-daemon, autopoint, chromium-browser, dcraw, dh-python, 
   libltdl-dev, libusb-dev, libusb-1.0-0-dev, libexif-dev, libopencv-dev, libpopt-dev, libxml2-dev, libjpeg-dev,
   log2ram, make, mc, net-tools, nginx, numlockx, pigpio, pigpio-tools, python3, python3-gpiozero,
   python3-libcamera, python3-opencv, python3-pip, python3-rpi-lgpio, python3-simplejson, python3-urwid, python3-yaml, python3-gpiozero,
-  raspi-gpio, raspi-utils, rawtherapee, realvnc-vnc-server, samba, screen, smbclient, ssh, swig,
+  raspi-gpio, raspi-utils, rawtherapee, realvnc-vnc-server, rpi-connect, samba, screen, smbclient, ssh, swig,
   usbutils, ustreamer, v4l-utils, valgrind, vim,
   wireshark, wvkbd, xrdp

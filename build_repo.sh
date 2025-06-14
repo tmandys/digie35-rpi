@@ -13,7 +13,7 @@ packages_subdir=dists/$VERSION_CODENAME/main/binary-armhf
 mkdir -p $packages_subdir
 
 packages=$packages_subdir/Packages
-dpkg-scanpackages -m --arch all pool/ > $packages
+dpkg-scanpackages -m pool/ > $packages
 cat $packages | gzip -9 > "$packages.gz"
 cd -
 

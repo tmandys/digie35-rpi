@@ -9,7 +9,7 @@ repo_dir="$dir/apt-repo"
 
 # generate list of packages in repo
 cd $repo_dir
-packages_subdir=dists/$VERSION_CODENAME/main/binary-armhf
+packages_subdir=dists/$VERSION_CODENAME/main/binary-arm64
 mkdir -p $packages_subdir
 
 packages=$packages_subdir/Packages

@@ -13,6 +13,12 @@ url=https://repos.digie35.com/debian
 curl -fsSL $url/repo.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/digie35.gpg
 echo "deb [signed-by=/etc/apt/keyrings/digie35.gpg] $url $VERSION_CODENAME main" | sudo tee /etc/apt/sources.list.d/digie35.list
 
+# Microsoft vscode repo
+url=https://packages.microsoft.com
+curl -fsSL $url/keys/microsoft.asc | sudo gpg --dearmor -o /etc/apt/keyrings/microsoft.gpg
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.gpg] $url/repos/code stable main" | sudo tee /etc/apt/sources.list.d/vscode.list
+
+
 sudo apt update
 
 # upgrade to latest, note: e.g. kernel 6.1.63 does not work with PWM@GPIO12,3. Kernel 6.6.31 is ok

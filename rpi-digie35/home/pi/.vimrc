@@ -93,11 +93,12 @@ set tabstop=4
 set shiftwidth=4
 set softtabstop=4 
 set autowrite
+set expandtab
 map <F7> :make<CR>
 imap <F7> <ESC>:make<CR>
 map <F2> :w<CR>
 imap <F2> <ESC>:w<CR><Ins>
-color darkblue
+colorscheme ron
 " set statusline=line\ %l,\ col\ %c\ [%p%%]
 set statusline=%F%m\ line\ %l/%L,\ col\ %c\ [%p%%]
 set laststatus=2
@@ -113,7 +114,7 @@ set laststatus=2
 	  au BufWritePost *.bin if &bin | %!xxd
 	  au BufWritePost *.bin set nomod | endif
 	augroup END
-	
+
 	augroup Docbook
 	  au!
 "	  au BufReadPre  *.xml so ~/vim/docbook.vim

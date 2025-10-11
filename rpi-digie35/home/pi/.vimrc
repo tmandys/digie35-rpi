@@ -159,7 +159,7 @@ menu Project.Files :new $project
 
 " so ~/vim/mydarkblue.vim
 " so ~/vim/morning.vim
-:color blue
+" :color blue
 
 " dump latex addon fix
 let g:Imap_FreezeImap=1

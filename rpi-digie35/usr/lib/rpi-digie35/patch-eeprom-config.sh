@@ -1,8 +1,9 @@
 #!/bin/sh
+set -eu
 
 # Patch file provided as the first argument. Intended as fake editor for raspi-eeprom-config
-CONFIG=$1
-if [ ! -f $CONFIG ]; then
+CONFIG=${1:-}
+if [ ! -f "$CONFIG" ]; then
     echo "Config file not provided as argument"
     exit 1
 fi
@@ -12,10 +13,10 @@ do_update() {
     name=$1
     value=$2
     echo "Patching $1=$2"
-    if ! grep -q "$name=" $CONFIG ; then
-      sed $CONFIG -i -e "\$$name=$value\n"
+    if ! grep -q "^$name=" "$CONFIG" ; then
+      sed "$CONFIG" -i -e "\$a$name=$value"
     else
-      sed $CONFIG -i -e "s/^.*$name=.*/$name=$value/"
+      sed "$CONFIG" -i -e "s/^$name=.*/$name=$value/"
     fi
 }
 

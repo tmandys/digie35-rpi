@@ -1,80 +1,59 @@
 #!/bin/sh
+set -eu
 
 . /etc/os-release
 
 echo "Building APT repository"
-
-dir=$(dirname $0)
+dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_dir="$dir/apt-repo"
+private_key="$dir/pgp/pgp-key.private"
+[ -f "$private_key" ] || { echo "Private key file does not exist. Generate it first" >&2; exit 1; }
 
-# generate list of packages in repo
-cd $repo_dir
-packages_subdir=dists/$VERSION_CODENAME/main/binary-arm64
-mkdir -p $packages_subdir
+stage=$(mktemp -d)
+trap 'rm -rf -- "$stage"' EXIT
+trap 'exit 1' HUP INT TERM
+GNUPGHOME="$stage/gnupg"
+export GNUPGHOME
+(umask 077; mkdir "$GNUPGHOME")
+gpg --batch --import "$private_key"
 
-packages=$packages_subdir/Packages
-dpkg-scanpackages -m pool/ > $packages
-cat $packages | gzip -9 > "$packages.gz"
-cd -
+# All packages are architecture-independent, published through the ARM64 index.
+packages_subdir=main/binary-arm64
+mkdir -p "$stage/$packages_subdir"
+(cd "$repo_dir" && dpkg-scanpackages -m pool/) > "$stage/$packages_subdir/Packages"
+gzip -9 -c "$stage/$packages_subdir/Packages" > "$stage/$packages_subdir/Packages.gz"
 
-cp $dir/pgp/pgp-key.public $repo_dir/repo.gpg.key
-
-# Import key into keyring
-private_key=$dir/pgp/pgp-key.private
-if [ ! -f $private_key ] ; then
-    echo "Private key file does not exist. Generate it first"
-    exit 1
-fi
-
-name_real=`cat $private_key | gpg --list-packets | grep ":user ID packet:" | sed  -nE 's/.*"([^ ]+).*/\1/p'`
-
-echo "GPG Name: $name_real"
-GNUPGHOME="$(mktemp -d pgp/pgpkeys-XXXXXX)"
-# get absolute path
-export GNUPGHOME=$(cd $GNUPGHOME; pwd)
-
-gpg --import < $private_key
-
-release=Release
-# generate releases
-do_hash() {
-    hash_name=$1
-    hash_cmd=$2
-    echo "$hash_name:"
-    for f in $(find -type f) ; do
-        f=$(echo $f | cut -c3- ) # remove ./prefix
-        if [ "$f" = "$release" ] ; then
-            continue
-        fi
-        echo " $(${hash_cmd} $f | cut -d " " -f 1) $(wc -c $f)"
-    done
-}
-
-do_release() {
-    suite=$1
-    cd $repo_dir/dists/$suite
-
-    cat << EOF > $release
+cd "$stage"
+cat > Release << EOF
 Origin: Digie35 Repository
 Label: Digie35
-Suite: $suite
+Suite: $VERSION_CODENAME
 Version: 1.0
-Architectures: all
+Architectures: arm64
 Components: main
 Description: Digie35 software repository
 Date: $(date -Ru)
 EOF
 
-    do_hash "MD5Sum" "md5sum" >> $release
-    do_hash "SHA1" "sha1sum" >> $release
-    do_hash "SHA256" "sha256sum" >> $release
-
-    cat $release | gpg --default-key $name_real -abs > "${release}.gpg"
-    cat $release | gpg --default-key $name_real -abs --clearsign > "In${release}"
-    cd -
+do_hash() {
+    echo "$1:"
+    for file in "$packages_subdir/Packages" "$packages_subdir/Packages.gz"; do
+        checksum=$("$2" "$file")
+        checksum=${checksum%% *}
+        size=$(wc -c < "$file")
+        printf ' %s %s %s\n' "$checksum" "$size" "$file"
+    done
 }
+do_hash MD5Sum md5sum >> Release
+do_hash SHA1 sha1sum >> Release
+do_hash SHA256 sha256sum >> Release
+# This isolated keyring contains only the imported repository signing key.
+gpg --batch --armor --detach-sign --output Release.gpg Release
+gpg --batch --armor --clearsign --output InRelease Release
 
-do_release "$VERSION_CODENAME"
-
-# Very dangerous when $GNUPGHOME is not set !
-# rm -rf $GNUPGHOME
+# Do not publish incomplete indexes when scanning or signing fails.
+destination="$repo_dir/dists/$VERSION_CODENAME"
+mkdir -p "$destination/$packages_subdir"
+cp "$packages_subdir/Packages" "$packages_subdir/Packages.gz" "$destination/$packages_subdir/"
+cp Release Release.gpg InRelease "$destination/"
+cp "$dir/pgp/pgp-key.public" "$repo_dir/repo.gpg.key"

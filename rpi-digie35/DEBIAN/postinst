@@ -1,11 +1,14 @@
 #!/bin/sh
+set -eu
+
+# dpkg also invokes postinst for recovery actions.
+case "${1:-configure}" in configure) ;; *) exit 0 ;; esac
 
 CONFIG=/boot/firmware/config.txt
-FILEPATH=`realpath $0`
 
-if [ ! -f $CONFIG ]; then
+if [ ! -f "$CONFIG" ]; then
     CONFIG=/boot/config.txt
-    if [ ! -f $CONFIG ]; then
+    if [ ! -f "$CONFIG" ]; then
       echo "/boot/*/config.txt" file not found
       exit 1
     fi
@@ -13,80 +16,42 @@ fi
 echo "Patching $CONFIG"
 
 raspi-config nonint do_i2c 0
-section_flag=
+CMDLINE="$(dirname "$CONFIG")/cmdline.txt"
+python3 /usr/lib/rpi-digie35/patch-boot-config.py "$CONFIG" "$CMDLINE"
 
-do_check_section() {
-    if ! tail -1 $CONFIG | grep -q "\\[$section\\]" ; then
-      if [ -z "$section_flag" ] ; then
-        sed $CONFIG -i -e "\$a[$section]"
-        section_flag=1
-      fi
-    fi
-}
-
-do_overlay() {
-    name=$1
-    value=$2
-    comment=$3
-    if ! grep -q "dtoverlay=$name," $CONFIG ; then
-      do_check_section
-      sed $CONFIG -i -e "\$a# $comment"
-      sed $CONFIG -i -e "\$adtoverlay=$name,$value\n"
-    else
-      sed $CONFIG -i -e "s/^.*dtoverlay=$name,.*/dtoverlay=$name,$value/"
-    fi
-}
-
-do_param() {
-    name=$1
-    value=$2
-    comment=$3
-    if ! grep -q "dtparam=$name=" $CONFIG ; then
-      do_check_section
-      sed $CONFIG -i -e "\$a# $comment"
-      sed $CONFIG -i -e "\$adtparam=$name=$value\n"
-    else
-      sed $CONFIG -i -e "s/^.*dtparam=$name=.*/dtparam=$name=$value/"
-    fi
-}
-
-
-do_keyvalue() {
-    name=$1
-    value=$2
-	if ! grep -q "$name=" $CONFIG ; then
-      do_check_section
-      sed $CONFIG -i -e "\$a$name=$value\n"
-    else
-      sed $CONFIG -i -e "s/^.*$name=.*/$name=$value/"
-    fi
-}
-
-section=all
-do_overlay pwm-2chan pin=12,func=4,pin2=13,func2=4 "Hardware PWM"
-do_overlay act-led gpio=26 "Active LED"
-do_overlay i2c-rtc mcp7941x "RTC hardware clock"
-do_keyvalue usb_max_current_enable 1
-
-section=pi5
-do_keyvalue avoid_warnings 1
-do_param pciex1 on "NVMe support for SSD"
+model=$(tr -d '\000' < /sys/firmware/devicetree/base/model)
+case "$model" in
+    "Raspberry Pi 3"*|"Raspberry Pi 4"*)
+        # PL011 moves from onboard Bluetooth to GPIO14/15 after reboot.
+        if systemctl cat hciuart.service >/dev/null 2>&1; then
+            systemctl disable --now hciuart.service
+        fi
+        ;;
+esac
+# Prevent explicit and generated login services from claiming the serial link.
+systemctl mask --now serial-getty@ttyAMA0.service serial-getty@serial0.service serial-getty@ttyS0.service
+usermod -a -G dialout pi
+echo "UART0 configured for GPIO14/15; reboot before using Digie35 UART."
 
 echo "Patching EEPROM"
-EDITOR="$(dirname $FILEPATH)/patch-eeprom-config.sh" rpi-eeprom-config -e
+# Pi 3 has no updatable bootloader EEPROM.
+case "$model" in
+    "Raspberry Pi 3"*) echo "Skipping bootloader EEPROM on $model" ;;
+    *) EDITOR=/usr/lib/rpi-digie35/patch-eeprom-config.sh rpi-eeprom-config -e ;;
+esac
 
 FILE=/etc/log2ram.conf
 echo "Patching $FILE"
-sed $FILE -i -e "s/^SIZE=.*/SIZE=100M/"
-sed $FILE -i -e "s/^MAIL=true/MAIL=false/"
+sed "$FILE" -i -e "s/^SIZE=.*/SIZE=100M/"
+sed "$FILE" -i -e "s/^MAIL=true/MAIL=false/"
 
 FILE=/etc/samba/smb.conf
-if ! grep -q "^\[media\]" $FILE ; then
+if ! grep -q "^\[media\]" "$FILE" ; then
   echo "Patching $FILE"
-  sed $FILE -i -e "\$a[media]"
-  sed $FILE -i -e "\$a\   comment = Mounted removable disks"
-  sed $FILE -i -e "\$a\   path = /media/pi"
-  sed $FILE -i -e "\$a\   read only = no"
+  sed "$FILE" -i -e "\$a[media]"
+  sed "$FILE" -i -e "\$a\   comment = Mounted removable disks"
+  sed "$FILE" -i -e "\$a\   path = /media/pi"
+  sed "$FILE" -i -e "\$a\   read only = no"
   smbcontrol smbd reload-config
 else
   echo "Patching $FILE skipped"
@@ -95,21 +60,21 @@ fi
 # setting numlock
 # numlockx does not work on wayland
 #FILE=/usr/share/lightdm/lightdm.conf.d/01_debian.conf
-#if ! grep -q "^greeter-setup-script=" $FILE ; then
+#if ! grep -q "^greeter-setup-script=" "$FILE" ; then
 #  echo "Patching $FILE"
-#  sed $FILE -i -e "\$agreeter-setup-script=/usr/bin/numlockx on"
+#  sed "$FILE" -i -e "\$agreeter-setup-script=/usr/bin/numlockx on"
 #else
 #  echo "Patching $FILE skipped"
 #fi
 
 FILE=/home/pi/.config/wayfire.ini
-crudini --set $FILE input kb_numlock_default_state true
+crudini --set "$FILE" input kb_numlock_default_state true
 
 # setting onscreen keyboard toggle
 FILE=/home/pi/.config/wf-panel-pi.ini
-if ! grep -q "^launcher_900004=" $FILE ; then
+if ! grep -q "^launcher_900004=" "$FILE" ; then
   echo "Patching $FILE"
-  sed $FILE -i -e "\$alauncher_900004=wvkbd.desktop"
+  sed "$FILE" -i -e "\$alauncher_900004=wvkbd.desktop"
 else
   echo "Patching $FILE skipped"
 fi
@@ -120,8 +85,7 @@ usermod -a -G wireshark pi
 modprobe usbmon
 setfacl -m u:pi:r /dev/usbmon*
 
-rm /usr/lib/python3.11/EXTERNALLY-MANAGED
+rm -f /usr/lib/python3.11/EXTERNALLY-MANAGED
 
 FILE=/etc/hostname
-sed $FILE -i -e "s/^raspberrypi/digie35/"
-
+sed "$FILE" -i -e "s/^raspberrypi/digie35/"

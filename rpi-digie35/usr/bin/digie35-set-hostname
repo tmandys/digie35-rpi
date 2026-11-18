@@ -1,0 +1,88 @@
+#!/bin/sh
+# Run on the target Raspberry Pi, including after cloning its SD card.
+set -eu
+
+mode=keep
+requested=
+case "$#:${1:-}" in
+    0:) ;;
+    1:--auto) mode=auto ;;
+    2:--hostname) mode=custom; requested=$(printf '%s' "$2" | tr 'A-Z' 'a-z') ;;
+    *) echo "Usage: $0 [--hostname NAME | --auto]" >&2; exit 1 ;;
+esac
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Run this script as root (sudo)." >&2
+    exit 1
+fi
+
+# Custom names belong to one board, so a cloned image gets a new name.
+state_file=/etc/rpi-digie35/hostname-state
+
+serial_file=/sys/firmware/devicetree/base/serial-number
+serial=
+if [ -r "$serial_file" ]; then
+    serial=$(tr -d '\000\n\r' < "$serial_file")
+fi
+if [ -z "$serial" ]; then
+    serial=$(awk '/^Serial[[:space:]]*:/ {print $3; exit}' /proc/cpuinfo)
+fi
+serial=$(printf '%s' "$serial" | tr 'A-F' 'a-f')
+case "$serial" in
+    ''|*[!0-9a-f]*) echo "Cannot read a valid Raspberry Pi serial number." >&2; exit 1 ;;
+esac
+if [ -z "$(printf '%s' "$serial" | tr -d '0')" ]; then
+    echo "Raspberry Pi serial number is all zeroes." >&2
+    exit 1
+fi
+digest=$(printf '%s' "$serial" | sha256sum)
+suffix=$(printf '%s' "$digest" | cut -c1-8)
+new_hostname="digie35-$suffix"
+if [ "$mode" = custom ]; then
+    new_hostname=$requested
+elif [ "$mode" = keep ] && [ -f "$state_file" ]; then
+    saved_serial=$(sed -n '1p' "$state_file")
+    if [ "$saved_serial" = "$serial" ]; then
+        new_hostname=$(sed -n '2p' "$state_file")
+    fi
+fi
+case "$new_hostname" in
+    ''|*[!a-z0-9-]*|-*|*-)
+        echo "Hostname must contain letters, digits or internal hyphens." >&2
+        exit 1 ;;
+esac
+if [ "${#new_hostname}" -gt 63 ]; then
+    echo "Hostname exceeds 63 characters." >&2
+    exit 1
+fi
+
+old_hostname=$(cat /etc/hostname)
+hosts=/etc/hosts
+temp_hosts=$(mktemp)
+trap 'rm -f -- "$temp_hosts"' EXIT
+trap 'exit 1' HUP INT TERM
+# Replace the canonical name, retain unrelated aliases and comments, and add
+# the mapping if absent. Remove obsolete aliases for the previous hostname.
+awk -v name="$new_hostname" -v old="$old_hostname" '
+    $1 == "127.0.1.1" {
+        comment = ""
+        pos = index($0, "#")
+        if (pos) { comment = substr($0, pos); $0 = substr($0, 1, pos - 1) }
+        printf "127.0.1.1\t%s", name
+        for (i = 3; i <= NF; i++)
+            if ($i != old && $i != name) printf " %s", $i
+        if (comment != "") printf " %s", comment
+        printf "\n"
+        found = 1
+        next
+    }
+    { print }
+    END { if (!found) printf "127.0.1.1\t%s\n", name }
+' "$hosts" > "$temp_hosts"
+
+# hostnamectl updates both the running hostname and /etc/hostname.
+# Failure is deliberately propagated rather than reporting partial success.
+hostnamectl set-hostname "$new_hostname"
+cat "$temp_hosts" > "$hosts"
+mkdir -p "$(dirname "$state_file")"
+printf '%s\n%s\n' "$serial" "$new_hostname" > "$state_file"
+echo "Hostname set to: $new_hostname"

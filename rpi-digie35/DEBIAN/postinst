@@ -4,6 +4,19 @@ set -eu
 # dpkg also invokes postinst for recovery actions.
 case "${1:-configure}" in configure) ;; *) exit 0 ;; esac
 
+# The application and desktop configuration belong to the existing pi account.
+if ! id pi >/dev/null 2>&1; then
+    echo "Create the pi user before installing rpi-digie35." >&2
+    exit 1
+fi
+pi_home=$(getent passwd pi | cut -d: -f6)
+
+# The archive uses root ownership for reproducible, unprivileged builds.
+# These are the only home paths shipped by the package; do not recursively
+# change unrelated user files or follow symlinks out of the home directory.
+pi_group=$(id -gn pi)
+chown -h "pi:$pi_group" /home/pi /home/pi/.vimrc /home/pi/.tmux.conf
+
 CONFIG=/boot/firmware/config.txt
 
 if [ ! -f "$CONFIG" ]; then
@@ -57,27 +70,8 @@ else
   echo "Patching $FILE skipped"
 fi
 
-# setting numlock
-# numlockx does not work on wayland
-#FILE=/usr/share/lightdm/lightdm.conf.d/01_debian.conf
-#if ! grep -q "^greeter-setup-script=" "$FILE" ; then
-#  echo "Patching $FILE"
-#  sed "$FILE" -i -e "\$agreeter-setup-script=/usr/bin/numlockx on"
-#else
-#  echo "Patching $FILE skipped"
-#fi
-
-FILE=/home/pi/.config/wayfire.ini
-crudini --set "$FILE" input kb_numlock_default_state true
-
-# setting onscreen keyboard toggle
-FILE=/home/pi/.config/wf-panel-pi.ini
-if ! grep -q "^launcher_900004=" "$FILE" ; then
-  echo "Patching $FILE"
-  sed "$FILE" -i -e "\$alauncher_900004=wvkbd.desktop"
-else
-  echo "Patching $FILE skipped"
-fi
+# Run as pi so newly created desktop configuration remains user-owned.
+runuser -u pi -- /usr/bin/python3 /usr/lib/rpi-digie35/patch-desktop-config.py "$pi_home"
 
 # wireshark stuff
 echo "May require 'sudo dpkg-reconfigure wireshark-common' to allow non-superuser to capture traffic"
@@ -85,7 +79,8 @@ usermod -a -G wireshark pi
 modprobe usbmon
 setfacl -m u:pi:r /dev/usbmon*
 
-rm -f /usr/lib/python3.11/EXTERNALLY-MANAGED
+# Use the distro interpreter, independently of a caller's activated venv.
+python_stdlib=$(/usr/bin/python3 -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')
+rm -f -- "$python_stdlib/EXTERNALLY-MANAGED"
 
-FILE=/etc/hostname
-sed "$FILE" -i -e "s/^raspberrypi/digie35/"
+/usr/bin/digie35-set-hostname
